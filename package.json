@@ -1,6 +1,7 @@
 {
-  "name": "emi-tracker",
+  "name": "emi-tracker-dashboard",
   "version": "1.0.0",
+  "description": "Web dashboard to track EMI payment and vehicle location",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,5 +12,14 @@
   "dependencies": {
     "express": "^4.18.2",
     "body-parser": "^1.20.2"
-  }
+  },
+  "keywords": [
+    "EMI",
+    "vehicle",
+    "tracker",
+    "express",
+    "arduino"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
 }
