@@ -2,6 +2,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
+process.env.TZ = "Asia/Kolkata";
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.json());
