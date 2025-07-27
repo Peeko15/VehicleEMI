@@ -1,89 +1,96 @@
-// server.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
-
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(express.json());
+const port = process.env.PORT || 3000;
 
 let vehicleStatus = {
   paid: true,
-  lat: 0,
-  lon: 0,
-  lastSeen: null,
-  emiDue: Date.now() + 7 * 24 * 60 * 60 * 1000 // Default 7 days
+  emiDue: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+  lat: 12.9716,
+  lon: 77.5946,
+  lastSeen: null
 };
 
-app.post('/check_payment', (req, res) => {
-  const now = Date.now();
-  vehicleStatus.paid = now <= vehicleStatus.emiDue;
-  res.json({ paid: vehicleStatus.paid ? 1 : 0 });
-});
-
-app.post('/update_loc', (req, res) => {
-  const { lat, lon } = req.body;
-  vehicleStatus.lat = parseFloat(lat);
-  vehicleStatus.lon = parseFloat(lon);
-  vehicleStatus.lastSeen = new Date();
-  res.send('OK');
-});
-
-app.post('/set_timer', (req, res) => {
-  const days = parseInt(req.body.days);
-  const hours = parseInt(req.body.hours);
-  const minutes = parseInt(req.body.minutes);
-  if (!isNaN(days) && !isNaN(hours) && !isNaN(minutes)) {
-    const totalMillis = (days * 24 * 60 + hours * 60 + minutes) * 60 * 1000;
-    vehicleStatus.emiDue = Date.now() + totalMillis;
-  }
-  res.redirect('/');
-});
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
-  const emiDueFormatted = new Date(vehicleStatus.emiDue).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  const lastSeenFormatted = vehicleStatus.lastSeen
-    ? new Date(vehicleStatus.lastSeen).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-    : 'Not available';
-
   res.send(`
   <html>
     <head>
-      <meta http-equiv="refresh" content="15" />
       <title>Vehicle EMI Tracker</title>
-      <style>
-        body { font-family: sans-serif; margin: 20px; background: #f7f7f7; color: #333; }
-        h1 { color: #2c3e50; }
-        label, input { margin: 5px 0; }
-        form { margin-top: 15px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-        #map { margin-top: 15px; border: 1px solid #ccc; }
-      </style>
+      <meta http-equiv="refresh" content="15">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     </head>
     <body>
-      <h1>🚗 Vehicle EMI Tracker</h1>
-      <p><strong>Payment Status:</strong> ${vehicleStatus.paid ? '✅ Paid' : '❌ Overdue'}</p>
-      <p><strong>Next EMI Due:</strong> ${emiDueFormatted}</p>
-      <p><strong>Last GPS Update:</strong> ${lastSeenFormatted}</p>
+      <h1>Vehicle EMI Tracker</h1>
+      <p>Payment status: <b>${vehicleStatus.paid ? '✅ Paid' : '❌ Overdue'}</b></p>
+      <p>Next EMI Due: ${new Date(vehicleStatus.emiDue).toLocaleString()}</p>
+      <p>Last GPS Update: ${vehicleStatus.lastSeen ? new Date(vehicleStatus.lastSeen).toLocaleString() : 'Not available'}</p>
+
       <form method="POST" action="/set_timer">
-        <label>Set New EMI Timer:</label><br>
-        Days: <input type="number" name="days" min="0" value="0" required />
-        Hours: <input type="number" name="hours" min="0" max="23" value="0" required />
-        Minutes: <input type="number" name="minutes" min="0" max="59" value="0" required />
+        <h3>Set EMI Timer:</h3>
+        Days: <input type="number" name="days" min="0" value="0" required /><br>
+        Hours: <input type="number" name="hours" min="0" max="23" value="0" required /><br>
+        Minutes: <input type="number" name="minutes" min="0" max="59" value="0" required /><br>
         <button type="submit">Update</button>
       </form>
-      <h3>🗺️ Live Location</h3>
+
+      <form method="POST" action="/mark_paid">
+        <button type="submit">Mark EMI as Paid</button>
+      </form>
+
+      <h3>Last Known Location:</h3>
       <div id="map" style="width:600px;height:400px;"></div>
-      <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY"></script>
+
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <script>
-        const loc = { lat: ${vehicleStatus.lat}, lng: ${vehicleStatus.lon} };
-        const map = new google.maps.Map(document.getElementById('map'), { zoom: 14, center: loc });
-        new google.maps.Marker({ position: loc, map: map });
+        const lat = ${vehicleStatus.lat};
+        const lon = ${vehicleStatus.lon};
+        const map = L.map('map').setView([lat, lon], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        L.marker([lat, lon]).addTo(map)
+          .bindPopup('Vehicle Location')
+          .openPopup();
       </script>
     </body>
   </html>
   `);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Dashboard running at http://localhost:${PORT}`);
+app.post('/set_timer', (req, res) => {
+  const { days, hours, minutes } = req.body;
+  const totalMillis = (parseInt(days) * 24 * 60 + parseInt(hours) * 60 + parseInt(minutes)) * 60000;
+  vehicleStatus.emiDue = new Date(Date.now() + totalMillis).toISOString();
+  vehicleStatus.paid = true;
+  res.redirect('/');
+});
+
+app.post('/mark_paid', (req, res) => {
+  vehicleStatus.paid = true;
+  res.redirect('/');
+});
+
+app.post('/update_location', (req, res) => {
+  const { lat, lon } = req.body;
+  vehicleStatus.lat = parseFloat(lat);
+  vehicleStatus.lon = parseFloat(lon);
+  vehicleStatus.lastSeen = new Date().toISOString();
+  res.sendStatus(200);
+});
+
+app.post('/check_payment', (req, res) => {
+  const now = new Date();
+  const due = new Date(vehicleStatus.emiDue);
+  if (now > due) {
+    vehicleStatus.paid = false;
+  }
+  res.json({ paid: vehicleStatus.paid });
+});
+
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
 });
